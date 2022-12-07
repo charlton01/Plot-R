@@ -9,9 +9,6 @@ use std::process::exit;
 
 const APP_ID: &str = "org.gtk_rs.HelloWorld3";
 
-
-
-
 pub struct AxisLabel {
 	pub width: i32,
     pub height: i32,
@@ -301,7 +298,7 @@ fn create_tick_positions(data:Vec<f64>) -> Vec<f64>  {
         else {
             copy_interval = 5.0;
 		}
-	println!("{} {} {} {} {} {}", view_range, num, num_ticks, interval, copy_interval, n);
+	println!("beep1 {} {} {} {} {} {}", view_range, lower_bound, num_ticks, interval, copy_interval, n);
 	let mut first_val = 0.0;
     let mut prev_val = 0.0;
     let mut times = 0.0;
@@ -315,11 +312,15 @@ fn create_tick_positions(data:Vec<f64>) -> Vec<f64>  {
 				let exp = temp_log.abs() +1.0;
 				let ub2 = 10_f64.powf(exp);
 				let copy_ub = (upper_bound*ub2).round();
-//                let copy_ub = round(upper_bound*10**(abs(temp_log) + 1));
-                times = copy_ub; // round(interval*10**(abs(temp_log) + 1)) + 2
+//              let copy_ub = round(upper_bound*10**(abs(temp_log) + 1));
+// python       times = copy_ub // round(interval*10**(abs(temp_log) + 1)) + 2
+				let bottom = (interval*ub2 + 2.0).round();
+				times = (copy_ub/bottom).round(); 
 			}
             else {
-                times = upper_bound; // round(interval) + 2
+// python       times = upper_bound // round(interval) + 2
+				let bottom = (interval + 2.0).round();
+				times = (upper_bound/bottom).round();
 			}
 		}
         while first_val >= lower_bound {
@@ -334,19 +335,27 @@ fn create_tick_positions(data:Vec<f64>) -> Vec<f64>  {
         times += 3.0;
 	}
     else {
+//		
         if lower_bound > 2.0*interval {
             if n < 0.0 {
 				let exp = temp_log.abs() +1.0;
 				let ub2 = 10_f64.powf(exp);
 				let copy_ub = (lower_bound*ub2).round();
- 
-//                copy_ub = round(lower_bound*10**(abs(temp_log) + 1));
-                times = copy_ub; // round(interval*10**(abs(temp_log) + 1)) - 2
+				println!("beep2 {} {} {} {} {} {} {}", view_range, lower_bound, num_ticks, interval, copy_interval, n, times);
+// python       copy_ub = round(lower_bound*10**(abs(temp_log) + 1));
+// python       times = copy_ub; // round(interval*10**(abs(temp_log) + 1)) - 2
+				let bottom = (interval*ub2 - 2.0).round();
+				times = (copy_ub/bottom).round();
+                println!("beep3 {} {} {} {} {} {} {}", view_range, lower_bound, num_ticks, interval, copy_interval, n, times);
 			}
             else{
-                times = lower_bound; // round(interval) - 2
+// python       times = lower_bound // round(interval) - 2
+                let bottom = (interval -2.0).round();
+                times = (lower_bound/bottom).round();
+				println!("beep4 {} {} {} {} {} {} {}", view_range, lower_bound, num_ticks, interval, copy_interval, n, times);
 			}
 		}
+		
         while first_val < lower_bound {
             first_val = times*copy_interval;
             if n < 0.0 {
@@ -357,6 +366,7 @@ fn create_tick_positions(data:Vec<f64>) -> Vec<f64>  {
 	}
 	
 	let mut retpoints = Vec::new();
+	println!("beep5 {} {} {} {} {} {} {}", view_range, lower_bound, num_ticks, interval, copy_interval, n, times);
 	if n < 0.0 {
         retpoints.push(first_val);
 	}
