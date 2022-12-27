@@ -1,9 +1,7 @@
-//use std::cell::Cell;
-//use std::rc::Rc;
+//  Plot-R a simple plotting program in Rust that uses gtk4-rs 
 
 use gtk::prelude::*;
 use gtk::{Application, ApplicationWindow, DrawingArea, Grid, Button, Orientation, glib};
-use is_close::is_close;
 use std::sync::{Arc,Mutex};
 use cairo::Context;
 use std::time::{Duration};
@@ -37,6 +35,9 @@ struct MyWidget{
 
 }
 
+// Note that MyWidget is of type MUtex.  This allows the dynamic update of
+// members of the struct and their use in the draw function of the DrawingArea
+
 impl MyWidget {
     fn new() -> Arc<Mutex<MyWidget>>  {
         let result = Arc::new(Mutex::new(MyWidget{
@@ -46,9 +47,7 @@ impl MyWidget {
             y_axis_offset: 0,
 			x_axis_offset: 0,
             x_vec: Vec::new(),
-            y_vec: Vec::new(),
-            
-           
+            y_vec: Vec::new(),    
         }));
         let r2 = result.clone();
         result.lock().unwrap().widget.set_draw_func(move|_, cr, w, h|{
@@ -88,25 +87,27 @@ impl MyWidget {
     }
     
     fn redraw(&self, cr: &Context, w: i32, h: i32) {
-        //println!("in draw:data_range{:?}", self.x_axis_range);
-        //println!("In draw: x_vec_new {:?}", self.x_vec);
         cr.set_source_rgb(1.0, 0.0, 0.0);
 				
 		for i in 0..self.x_vec.len() {
-			let extents = cr.text_extents("O").unwrap(); 
-			let mut x = self.x_axis_offset as f64 + self.x_vec[i]*w as f64/self.x_axis_range as f64;
-			let mut y = self.y_axis_offset as f64 + h as f64 - self.y_vec[i]* h as f64/self.y_axis_range as f64;
-			x = x - (extents.width()/2.0);
-			y = y + (extents.height()/2.0);
-			cr.move_to(x, y);
-			let _res = cr.show_text("O");
+			let extents = cr.text_extents("x").unwrap(); 
+			let mut x = (self.x_axis_offset as f64 + self.x_vec[i])*w as f64/self.x_axis_range as f64;
+			let mut y = h as f64 + ((self.y_axis_offset as f64 - self.y_vec[i])* h as f64)/self.y_axis_range as f64;
+// This is written to draw lines between points but the commented code show how to print a character instead
+			//x = x - (extents.width()/2.0);
+			//y = y + (extents.height()/2.0);
+			if i == 0 {
+				cr.move_to(x, y);
+			} else {
+				cr.line_to(x, y);
+				cr.stroke();
+				cr.move_to(x, y);
+			}
+			//let _res = cr.show_text("x");
 		}
 		()
 
-	}	
-        
-    
- 
+	}	 
 }
 
 pub struct Axis {
@@ -115,7 +116,6 @@ pub struct Axis {
     pub fontsz: f64,
     pub hstretch: bool,
     pub vstretch: bool,
-   
 }
 
 impl Axis {
@@ -133,7 +133,6 @@ fn create_plot(pl_params: &PlotParams) -> Grid {
 
 	let x_ticks = create_tick_positions(&pl_params, "x");
 	let y_ticks = create_tick_positions(&pl_params, "y");
-	//let area = create_canvas(&pl_params);
 	
 	let h_axis_b = Axis::new(100, pl_params.margin_width, 11.0, false, false);
 	let h_axis_t = Axis::new(100, pl_params.margin_width, 11.0, false, false);
@@ -144,7 +143,6 @@ fn create_plot(pl_params: &PlotParams) -> Grid {
 	let axis_y_l = create_axis_y_l(v_axis_l, y_ticks, pl_params.left_label.clone(), pl_params.margin_width as f64);
 	let axis_y_r = create_axis_y_r(v_axis_r, pl_params.right_label.clone(), pl_params.margin_width as f64);
 
-	//pl_grid.attach(&area, 1, 1, 1, 1);
 	pl_grid.attach(&axis_x_t, 0, 0, 3, 1);
 	pl_grid.attach(&axis_x_b, 0, 2, 3, 1);
 	pl_grid.attach(&axis_y_l, 0, 0, 1, 3);
@@ -160,20 +158,6 @@ fn create_canvas() -> DrawingArea {
 	area.set_content_height(200);
 	area.set_hexpand(true);
 	area.set_vexpand(true);
-//	area.set_draw_func(move|_, cr, w, h| {
-//		cr.set_source_rgb(1.0, 0.0, 0.0);
-//		for i in 0..x_vec.len() {
-//			let extents = cr.text_extents("O").unwrap(); 
-//			let mut x = x_vec[i]*w as f64/x_axis_range;
-//			let mut y = h as f64 - y_vec[i]* h as f64/y_axis_range;
-//			x = x - (extents.width()/2.0);
-//			y = y + (extents.height()/2.0);
-//			cr.move_to(x, y);
-//			let _res = cr.show_text("O");
-//		}
-//		()
-//		
-//	});	
 	area
 }
 
@@ -211,14 +195,12 @@ fn create_axis_x_b(axis:Axis, ticks:Vec<f64>, label: String, m_width: f64) -> Dr
 // draw tick labels (numbers) at each tick mark
 				cr.set_source_rgb(0.0, 0.0, 0.0);
 				cr.set_font_size(axis.fontsz);
-//				let tick_label = format!("{}", n);
 				let tick_label = format!("{}", ticks[n]);
-//				let extents = cr.text_extents(&tick_label).unwrap(); 
 				let extents = cr.text_extents(&tick_label).unwrap();
 				let x_tick_text = x - (extents.width()/2.0);
 				cr.move_to (x_tick_text, 7.0 + extents.height());
 				_res = cr.show_text(&tick_label);
-// draw minor ticks
+// draw minor ticks...  only on the bottom axis
 				let minor_ticks = x_factor/4.0;
 				for i in 1..4 {	
 					cr.move_to (x + i as f64*minor_ticks, 1.0);
@@ -395,6 +377,10 @@ fn f_len(n: f64) -> f64 {
     0.0
 }
 
+//  The following functions are all dealing with the generation of tick mark coordinates
+//  the code is translated to Rust from JavaScript
+// See https://github.com/cenfun/nice-ticks/ for the js code
+
 fn mul(n1: f64, n2: f64) -> f64{
     let r1 = f_len(n1);
     let r2 = f_len(n2);
@@ -494,6 +480,7 @@ fn main() {
 
 fn build_ui(app: &Application) {
   
+// This button does nothing at present.  Was originally used for testing.
 	let button = Button::builder()
         .label("Press me!")
         .margin_top(12)
@@ -509,22 +496,19 @@ fn build_ui(app: &Application) {
     let mut pl_params = PlotParams {
 		margin_width: 40,
 		//top_label: String::from("This is the top label"),
+//  If there is no top label then the top label and tick marks will not draw.
 		top_label: String::from(""),
 		right_label: String::from("This is the right label"),
 		bottom_label: String::from("This is the bottom label"),
 		left_label: String::from("This is the left label"),
 		x_max: 100.0,
 		x_min: 0.0,
-		y_max: 10.0,
-		y_min: -10.0,
+		y_max: 1.0,
+		y_min: -1.0,
 		num_x_ticks: 10.0,
 		num_y_ticks: 5.0	
 	};
-    
-    
 
-    let y_vec3 = vec![0.0, 1.0, 2.0, 2.0, 8.0, 8.0, 20.0, 40.0, 70.0];
-    
     let mut pl_grid = create_plot(&pl_params);
     
     let my_widget = MyWidget::new();
@@ -532,8 +516,6 @@ fn build_ui(app: &Application) {
 	
 	let x_ticks = create_tick_positions(&pl_params, "x");
 	let y_ticks = create_tick_positions(&pl_params, "y");
-	
-	println!("{}", x_ticks[x_ticks.len()-1]);
 	
 	let x_tick_range = (x_ticks[x_ticks.len()-1] - x_ticks[0]).abs();
 	let y_tick_range = (y_ticks[y_ticks.len()-1] - y_ticks[0]).abs();
@@ -549,11 +531,8 @@ fn build_ui(app: &Application) {
 
     gtk_box.append(&button);
 
-// Reference-counted object with inner mutability
-//    let number = Rc::new(Cell::new(0));
-    
 	button.connect_clicked(move |_| {
-		
+// nothing here on purpose		
             
      });
 
@@ -569,6 +548,13 @@ fn build_ui(app: &Application) {
     // Present window
     window.show();
 	let mut n = 0;
+	
+//  tick is a function called by the timer (see below).  Each time it is called 
+// it calculates a sin function that is transferred to the MyWIdget struct and that
+// triggers a redraw of the plotting portion of the image.
+// Each time it is called the function draws at a different displacement.  This gives
+// the impression that the plot is moving.
+
 	let tick = move || -> gio::prelude::Continue {
         n += 1;
         if n > 100 { n = 1}
@@ -576,7 +562,7 @@ fn build_ui(app: &Application) {
         let mut y2_vec = Vec::new();     
         for i in 1..100 { 
 		    
-        x2_vec.push((4 as f64*M_PI*(i as f64)/99 as f64)*100.0);
+        x2_vec.push((4 as f64*M_PI*(i as f64)/99 as f64)*20.0);
         y2_vec.push((4 as f64*M_PI*(n as f64 + 4 as f64*i as f64)/99 as f64).sin());
        
       }
@@ -588,8 +574,8 @@ fn build_ui(app: &Application) {
        gio::prelude::Continue(true)
     };
     
-// use timeout_add_local to run the fn tick at regular intervals
-	glib::timeout_add_local(Duration::from_millis(100), tick);  // This works. gio::prelude::timeout_add does not.
+// using timeout_add_local to run the fn tick at regular intervals
+	glib::timeout_add_local(Duration::from_millis(10), tick);  // This works. gio::prelude::timeout_add does not.
 
     //window.present();
 }
