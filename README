@@ -1,0 +1,15 @@
+The Rust code in this archive is the result of a first attempt to a) learn Rust and b) to make use of gtk4-rs.  While there are several good sources of material for learning Rust (The Rust Programming Language is a great resource), gtk4-rs is much more of a challenge. Experience in using gtk with other languages like C or C++ is useful but does not help a lot.
+
+As a first project I chose to write a plotting program that has the usual bells and whistles of axes, tick marks, axis labels and the ability to display x,y-functions at a high rate of frames per second. Unfortunately, I was not able to find much in the way of examples of how to make use of gtk drawing areas and the cairo libraries for displaying text, lines and symbols.  It has taken me some time to put together this first attempt.  I hope it will be useful to others.
+
+The current program simply presents a plot of a sin function with the additional feature that the function is replotted continuously with a slight shift in the x position so that one can see animation of the graph when the program is executed.
+
+The interested reader can trace through the code to discover how the elements in the graph were constructed.
+
+One of the more difficult challenges was to find a method to continuously send updated function data to the draw funtion that presents the graph.  The very strict rules on ownership and borrowing in Rust makes this difficult.  It was overcome by using a Mutex struct whose members could be more easily manipulated without invoking compiler errors.  The inspiration for using a Mutex comes from https://stackoverflow.com/questions/31595115/how-can-i-get-my-own-data-to-a-gtk-callback-when-using-rust-gnome.  The code used for generating nice tick marks comes from converting a similar javascript program to Rust (see https://github.com/cenfun/nice-ticks/).  CUrrently, only the bottom axis (x) and the left axis (y) tick marks are created and displayed.
+
+I would be very happy to answer questions about the code.  You can send personal Email to charltn at gmail.com.
+
+Jim Charlton, December 27, 2022
+
+
