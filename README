@@ -6,10 +6,13 @@ The current program simply presents a plot of a sin function with the additional
 
 The interested reader can trace through the code to discover how the elements in the graph were constructed.
 
-One of the more difficult challenges was to find a method to continuously send updated function data to the draw funtion that presents the graph.  The very strict rules on ownership and borrowing in Rust makes this difficult.  It was overcome by using a Mutex struct whose members could be more easily manipulated without invoking compiler errors.  The inspiration for using a Mutex comes from https://stackoverflow.com/questions/31595115/how-can-i-get-my-own-data-to-a-gtk-callback-when-using-rust-gnome.  The code used for generating nice tick marks comes from converting a similar javascript program to Rust (see https://github.com/cenfun/nice-ticks/).  CUrrently, only the bottom axis (x) and the left axis (y) tick marks are created and displayed.
+One of the more difficult challenges was to find a method to continuously send updated function data to the draw function that presents the graph.  The very strict rules on ownership and borrowing in Rust makes this difficult.  It was overcome by using a Mutex struct whose members could be more easily manipulated without invoking compiler errors.  The inspiration for using a Mutex comes from https://stackoverflow.com/questions/31595115/how-can-i-get-my-own-data-to-a-gtk-callback-when-using-rust-gnome.  The code used for generating nice tick marks comes from converting a similar javascript program to Rust (see https://github.com/cenfun/nice-ticks/).  Currently, only the bottom axis (x) and the left axis (y) tick marks are created and displayed.  Nominal tick marks are displayed on the right and top axis depending on whether an axis label is defined.
+
+I am quite aware that there are better plotting programs and libraries in Rust (Plotter for example).  The goal of the present effort was not to provide a better solution.  It was to provide a simple example of how the code can be written.  I am also aware that there are many, many deficiencies in the style of the code written.  I am a beginning Rust programmer and am still learning.
+
+There are no restrictions or guarantees on using this code either for personal or commercial use.  Acknowledgement is always appreciated
 
 I would be very happy to answer questions about the code.  You can send personal Email to charltn at gmail.com.
 
 Jim Charlton, December 27, 2022
-
 
