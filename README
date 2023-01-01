@@ -2,7 +2,7 @@ The Rust code in this archive is the result of a first attempt to a) learn Rust 
 
 As a first project I chose to write a plotting program that has the usual bells and whistles of axes, tick marks, axis labels and the ability to display x,y-functions at a high rate of frames per second. Unfortunately, I was not able to find much in the way of examples of how to make use of gtk drawing areas and the cairo libraries for displaying text, lines and symbols.  It has taken me some time to put together this first attempt.  I hope it will be useful to others.
 
-The current program simply presents a plot of a sin function with the additional feature that the function is replotted continuously with a slight shift in the x position so that one can see animation of the graph when the program is executed.
+The current program simply presents a plot of a sin function with the additional feature that the function is replotted continuously with a slight shift in the x position so that one can see animation of the graph when the program is executed.  I also illustrated how two curves could be plotted on the same canvas.  See the tick function.
 
 The interested reader can trace through the code to discover how the elements in the graph were constructed.
 
