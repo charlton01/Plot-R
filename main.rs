@@ -24,6 +24,12 @@ pub struct PlotParams {
 	pub num_y_ticks: f64
 }
 
+struct Curve{
+	x_vec: Vec<f64>,
+    y_vec: Vec<f64>,
+    color: (f64, f64, f64)
+}
+
 struct MyWidget{
     widget: gtk::DrawingArea,
     x_axis_range: i32,
@@ -32,10 +38,13 @@ struct MyWidget{
     x_axis_offset: i32,
     x_vec: Vec<f64>,
     y_vec: Vec<f64>,
-
+    color: (f64, f64, f64),
+	curves: Vec<Curve>,
 }
 
-// Note that MyWidget is of type MUtex.  This allows the dynamic update of
+
+
+// Note that MyWidget is of type Mutex.  This allows the dynamic update of
 // members of the struct and their use in the draw function of the DrawingArea
 
 impl MyWidget {
@@ -47,7 +56,9 @@ impl MyWidget {
             y_axis_offset: 0,
 			x_axis_offset: 0,
             x_vec: Vec::new(),
-            y_vec: Vec::new(),    
+            y_vec: Vec::new(),
+            color: (1.0, 0.0, 0.0),
+            curves: Vec::new()
         }));
         let r2 = result.clone();
         result.lock().unwrap().widget.set_draw_func(move|_, cr, w, h|{
@@ -57,25 +68,19 @@ impl MyWidget {
         result
     }
     fn set_x_vec(&mut self, new_vec: &Vec<f64>) {
-        self.x_vec = new_vec.to_vec();
-        self.widget.queue_draw();
-        
+        self.x_vec = new_vec.to_vec();   
     }
     
     fn set_y_vec(&mut self, new_vec: &Vec<f64>) {
         self.y_vec = new_vec.to_vec();
-        self.widget.queue_draw();
-        
     }
     
     fn set_y_axis_range(&mut self, new_range: i32) {
         self.y_axis_range = new_range;
-        self.widget.queue_draw();
     }
     
     fn set_x_axis_range(&mut self, new_range: i32) {
         self.x_axis_range = new_range;
-        self.widget.queue_draw();   
     }
     
     fn set_x_axis_offset(&mut self, offset: i32) {
@@ -86,24 +91,42 @@ impl MyWidget {
         self.y_axis_offset = offset;    
     }
     
+    fn set_color (&mut self, (r, g, b): (f64, f64, f64)){
+		self.color = (r, g, b);
+	}
+    
+    fn add_curve (&mut self, new_curve: Curve){
+		self.curves.push(new_curve);
+	}
+    
     fn redraw(&self, cr: &Context, w: i32, h: i32) {
-        cr.set_source_rgb(1.0, 0.0, 0.0);
+		
+		for ii in 0..self.curves.len(){
+			
+        cr.set_source_rgb(self.curves[ii].color.0, self.curves[ii].color.1, self.curves[ii].color.2);
 				
-		for i in 0..self.x_vec.len() {
-			let extents = cr.text_extents("x").unwrap(); 
-			let mut x = (self.x_axis_offset as f64 + self.x_vec[i])*w as f64/self.x_axis_range as f64;
-			let mut y = h as f64 + ((self.y_axis_offset as f64 - self.y_vec[i])* h as f64)/self.y_axis_range as f64;
-// This is written to draw lines between points but the commented code show how to print a character instead
-			//x = x - (extents.width()/2.0);
-			//y = y + (extents.height()/2.0);
+		for i in 0..self.curves[ii].x_vec.len() {
+			
+			let mut x = (self.x_axis_offset as f64 + self.curves[ii].x_vec[i])*w as f64/self.x_axis_range as f64;
+			//let mut x = (self.x_axis_offset as f64 + self.x_vec[i])*w as f64/self.x_axis_range as f64;
+			let mut y = h as f64 + ((self.y_axis_offset as f64 - self.curves[ii].y_vec[i])* h as f64)/self.y_axis_range as f64;
+			//let mut y = h as f64 + ((self.y_axis_offset as f64 - self.y_vec[i])* h as f64)/self.y_axis_range as f64;
 			if i == 0 {
 				cr.move_to(x, y);
 			} else {
 				cr.line_to(x, y);
-				cr.stroke();
+				let _res = cr.stroke();
 				cr.move_to(x, y);
 			}
+			
+// This is written to draw lines between points but the commented code shows how to print a character instead
+			//let extents = cr.text_extents("x").unwrap(); 
+			//x = x - (extents.width()/2.0);
+			//y = y + (extents.height()/2.0);
+			//cr.move_to(x, y);
 			//let _res = cr.show_text("x");
+			
+		}
 		}
 		()
 
@@ -170,14 +193,14 @@ fn create_axis_x_b(axis:Axis, ticks:Vec<f64>, label: String, m_width: f64) -> Dr
 		axis_x_b.set_draw_func(move|_, cr, w, h| {
 
 			cr.set_source_rgba(0.0, 1.0, 0.0, 0.3);
-            cr.paint();
+            let mut _res = cr.paint();
  
 // draw line along bottom axis
 			cr.set_source_rgb(0.0, 0.0, 0.0);
 			cr.set_line_width(1.0);
 			cr.move_to(m_width, 1.0);
 			cr.line_to(w as f64 - m_width, 1.0);
-			let mut _res = cr.stroke();
+			_res = cr.stroke();
 			
 // insert the axis label 			
 			cr.set_source_rgb(0.0, 0.0, 0.0);
@@ -188,7 +211,7 @@ fn create_axis_x_b(axis:Axis, ticks:Vec<f64>, label: String, m_width: f64) -> Dr
 //  Insert the tick marks...			
 			for n in 0..ticks.len() {
 				let x_factor = (w as f64 - 2.0*m_width)/(ticks.len() -1) as f64;
-				let mut x = m_width + n as f64*x_factor;
+				let x = m_width + n as f64*x_factor;
 				cr.move_to (x, 1.0);
 				cr.line_to (x, 6.0);
 				_res = cr.stroke();
@@ -221,14 +244,14 @@ fn create_axis_x_t(axis:Axis, label: String, m_width: f64) -> DrawingArea {
 		axis_x_t.set_draw_func(move|_, cr, w, _| {
 			
 			cr.set_source_rgba(0.0, 1.0, 0.0, 0.3);
-			cr.paint();
+			let mut _res = cr.paint();
 			
 // draw line along top axis
 			cr.set_source_rgb(0.0, 0.0, 0.0);
 			cr.set_line_width(1.0);
 			cr.move_to(m_width, m_width-1.0);
 			cr.line_to(w as f64 - m_width, m_width-1.0);
-			let mut _res = cr.stroke();
+			_res = cr.stroke();
 			
 // If there is no label do not draw ticks, tick_labels, or minor ticks
 			if label.len() == 0 {
@@ -270,14 +293,14 @@ fn create_axis_y_l(axis:Axis, ticks:Vec<f64>, label: String, m_width: f64) -> Dr
 		axis_y_l.set_draw_func(move|_, cr, w, h| {
 			
 			cr.set_source_rgba(0.0, 1.0, 0.0, 0.3);
-            cr.paint();
+            let mut _res = cr.paint();
             
 // draw line along left axis
 			cr.set_source_rgb(0.0, 0.0, 0.0);
 			cr.set_line_width(1.0);
 			cr.move_to(m_width - 1.0, m_width);
 			cr.line_to(m_width - 1.0, h as f64 - m_width);
-			let mut _res = cr.stroke();
+			_res = cr.stroke();
 			
 // insert the tick marks and tick labels
 //			for n in 0..11 {
@@ -322,14 +345,14 @@ fn create_axis_y_r(axis:Axis, label: String, m_width: f64) -> DrawingArea {
 		axis_y_r.set_draw_func(move|_, cr, w, h| {
 			
 			cr.set_source_rgba(0.0, 1.0, 0.0, 0.3);
-            cr.paint();
+            let mut _res =cr.paint();
             
 // draw line along right axis
 			cr.set_source_rgb(0.0, 0.0, 0.0);
 			cr.set_line_width(1.0);
 			cr.move_to(1.0, m_width);
 			cr.line_to(1.0, h as f64 - m_width);
-			let mut _res = cr.stroke();
+			_res = cr.stroke();
 				
 			for n in 0..11 {
 //draw tick marks onlong the right axis
@@ -362,6 +385,10 @@ fn create_axis_y_r(axis:Axis, label: String, m_width: f64) -> DrawingArea {
 	axis_y_r
 }
 
+//  The following functions are all dealing with the generation of tick mark coordinates
+//  the code is translated to Rust from JavaScript
+// See https://github.com/cenfun/nice-ticks/ for the js code
+
 fn f_int(n: f64) -> String {
     let s = n.to_string();
     let a: String = s.split(".").map(str::to_string).collect();
@@ -376,10 +403,6 @@ fn f_len(n: f64) -> f64 {
     }
     0.0
 }
-
-//  The following functions are all dealing with the generation of tick mark coordinates
-//  the code is translated to Rust from JavaScript
-// See https://github.com/cenfun/nice-ticks/ for the js code
 
 fn mul(n1: f64, n2: f64) -> f64{
     let r1 = f_len(n1);
@@ -493,7 +516,7 @@ fn build_ui(app: &Application) {
         .orientation(Orientation::Vertical)
         .build();
            
-    let mut pl_params = PlotParams {
+    let pl_params = PlotParams {
 		margin_width: 40,
 		//top_label: String::from("This is the top label"),
 //  If there is no top label then the top label and tick marks will not draw.
@@ -509,7 +532,7 @@ fn build_ui(app: &Application) {
 		num_y_ticks: 5.0	
 	};
 
-    let mut pl_grid = create_plot(&pl_params);
+    let pl_grid = create_plot(&pl_params);
     
     let my_widget = MyWidget::new();
 	let a2 = my_widget.clone();
@@ -557,19 +580,39 @@ fn build_ui(app: &Application) {
 
 	let tick = move || -> gio::prelude::Continue {
         n += 1;
-        if n > 100 { n = 1}
+        if n > 500 { n = 1}
+        a2.lock().unwrap().curves.clear();
+        // animate the sequential plots by shifting the ydata by a bit for each plot
         let mut x2_vec = Vec::new();
-        let mut y2_vec = Vec::new();     
-        for i in 1..100 { 
-		    
-        x2_vec.push((4 as f64*M_PI*(i as f64)/99 as f64)*20.0);
-        y2_vec.push((4 as f64*M_PI*(n as f64 + 4 as f64*i as f64)/99 as f64).sin());
-       
-      }
-        a2.lock().unwrap().set_x_vec(&x2_vec);
-       
-        a2.lock().unwrap().set_y_vec(&y2_vec);
-      
+        let mut y2_vec = Vec::new();
+        a2.lock().unwrap().set_color((1.0, 0.0, 0.0));
+        // create the x, y data for a plot
+        for i in 1..500 {     
+			x2_vec.push((4 as f64*M_PI*(i as f64)/499 as f64)*20.0);
+			y2_vec.push((4 as f64*M_PI*(n as f64 + 4 as f64*i as f64)/499 as f64).sin());
+		}
+		// upload the x, y data to the widget that draws to plot canvas
+        //a2.lock().unwrap().set_x_vec(&x2_vec);   
+        //a2.lock().unwrap().set_y_vec(&y2_vec);
+		
+		let mut c1 = Curve{x_vec: x2_vec, y_vec: y2_vec, color: (1.0, 0.0, 0.0)};
+		a2.lock().unwrap().add_curve(c1);
+		
+        // add a second curve		
+		let mut x3_vec = Vec::new();
+        let mut y3_vec = Vec::new();
+		
+		y3_vec.push(-0.5);
+		y3_vec.push(0.5);
+		x3_vec.push(10.0);
+		x3_vec.push(80.0);
+		
+        c1 = Curve{x_vec: x3_vec, y_vec: y3_vec, color: (0.0, 0.0, 1.0)};
+		a2.lock().unwrap().add_curve(c1);
+        
+        // trigger a redraw of the canvas
+        a2.lock().unwrap().widget.queue_draw();
+        
         // we could return glib::Continue(false) to stop our clock after this tick
        gio::prelude::Continue(true)
     };
@@ -577,5 +620,4 @@ fn build_ui(app: &Application) {
 // using timeout_add_local to run the fn tick at regular intervals
 	glib::timeout_add_local(Duration::from_millis(10), tick);  // This works. gio::prelude::timeout_add does not.
 
-    //window.present();
 }
