@@ -36,13 +36,8 @@ struct MyWidget{
     y_axis_range: i32,
     y_axis_offset: i32,
     x_axis_offset: i32,
-    x_vec: Vec<f64>,
-    y_vec: Vec<f64>,
-    color: (f64, f64, f64),
 	curves: Vec<Curve>,
 }
-
-
 
 // Note that MyWidget is of type Mutex.  This allows the dynamic update of
 // members of the struct and their use in the draw function of the DrawingArea
@@ -55,26 +50,16 @@ impl MyWidget {
             y_axis_range: 0,
             y_axis_offset: 0,
 			x_axis_offset: 0,
-            x_vec: Vec::new(),
-            y_vec: Vec::new(),
-            color: (1.0, 0.0, 0.0),
             curves: Vec::new()
         }));
         let r2 = result.clone();
         result.lock().unwrap().widget.set_draw_func(move|_, cr, w, h|{
            r2.lock().unwrap().redraw(cr, w, h);
         });
-              
+             
         result
     }
-    fn set_x_vec(&mut self, new_vec: &Vec<f64>) {
-        self.x_vec = new_vec.to_vec();   
-    }
-    
-    fn set_y_vec(&mut self, new_vec: &Vec<f64>) {
-        self.y_vec = new_vec.to_vec();
-    }
-    
+   
     fn set_y_axis_range(&mut self, new_range: i32) {
         self.y_axis_range = new_range;
     }
@@ -90,17 +75,14 @@ impl MyWidget {
     fn set_y_axis_offset(&mut self, offset: i32) {
         self.y_axis_offset = offset;    
     }
-    
-    fn set_color (&mut self, (r, g, b): (f64, f64, f64)){
-		self.color = (r, g, b);
-	}
-    
+       
     fn add_curve (&mut self, new_curve: Curve){
 		self.curves.push(new_curve);
 	}
     
     fn redraw(&self, cr: &Context, w: i32, h: i32) {
 		
+		//interate through the curves and plot each one
 		for ii in 0..self.curves.len(){
 			
         cr.set_source_rgb(self.curves[ii].color.0, self.curves[ii].color.1, self.curves[ii].color.2);
@@ -303,12 +285,9 @@ fn create_axis_y_l(axis:Axis, ticks:Vec<f64>, label: String, m_width: f64) -> Dr
 			_res = cr.stroke();
 			
 // insert the tick marks and tick labels
-//			for n in 0..11 {
 			for n in 0..ticks.len(){
 				//draw tick marks onlong the left axis
 				let mut y = m_width + n as f64*(h as f64 - 2.0*m_width) /(ticks.len() -1) as f64;
-				//if x == 20.0 { x = 21.0;}
-				//if x >= (w - 20) as f64 {x = (w-20) as f64}
 				cr.move_to (m_width, y);
 				cr.line_to (m_width -6.0, y);
 				let mut _res = cr.stroke();
@@ -585,16 +564,12 @@ fn build_ui(app: &Application) {
         // animate the sequential plots by shifting the ydata by a bit for each plot
         let mut x2_vec = Vec::new();
         let mut y2_vec = Vec::new();
-        a2.lock().unwrap().set_color((1.0, 0.0, 0.0));
         // create the x, y data for a plot
         for i in 1..500 {     
 			x2_vec.push((4 as f64*M_PI*(i as f64)/499 as f64)*20.0);
 			y2_vec.push((4 as f64*M_PI*(n as f64 + 4 as f64*i as f64)/499 as f64).sin());
 		}
-		// upload the x, y data to the widget that draws to plot canvas
-        //a2.lock().unwrap().set_x_vec(&x2_vec);   
-        //a2.lock().unwrap().set_y_vec(&y2_vec);
-		
+				
 		let mut c1 = Curve{x_vec: x2_vec, y_vec: y2_vec, color: (1.0, 0.0, 0.0)};
 		a2.lock().unwrap().add_curve(c1);
 		
