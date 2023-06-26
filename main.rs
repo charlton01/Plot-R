@@ -1,21 +1,36 @@
 //  Plot-R a simple plotting program in Rust that uses gtk4-rs 
 
 use gtk::prelude::*;
-use gtk::{Application, ApplicationWindow, DrawingArea, Grid, Button, Orientation, glib};
+use gtk::{Application, ApplicationWindow, DrawingArea, Grid, Button, Orientation, glib, EventControllerMotion};
 use std::sync::{Arc,Mutex};
 use cairo::Context;
 use std::time::{Duration};
+
+use std::cell::Cell;
+use std::rc::Rc;
+use glib::clone;
 
 const M_PI: f64 = 3.14159265358979323846;
 
 const APP_ID: &str = "org.gtk_rs.HelloWorld3";
 
+pub struct Rectangle {
+    x1: f64,
+    y1: f64,
+    w: f64,  // width
+    h: f64   // height
+}
+#[derive(Clone)]
 pub struct PlotParams {
 	pub margin_width: i32,
 	pub top_label: String,
 	pub right_label: String,
 	pub bottom_label: String,
 	pub left_label: String,
+	pub x0_max: f64,
+	pub x0_min: f64,
+	pub y0_max: f64, 
+	pub y0_min: f64,
 	pub x_max: f64,
 	pub x_min: f64,
 	pub y_max: f64, 
@@ -24,61 +39,163 @@ pub struct PlotParams {
 	pub num_y_ticks: f64
 }
 
+impl PlotParams {
+	
+	fn set_x_max(&mut self, new_x_max: f64) {
+        self.x_max = new_x_max;
+    }
+    
+    fn set_y_max(&mut self, new_y_max: f64) {
+        self.y_max = new_y_max;
+    }
+    
+    fn set_x_min(&mut self, new_x_min: f64) {
+        self.x_min = new_x_min;
+    }
+    
+    fn set_y_min(&mut self, new_y_min: f64) {
+        self.y_min = new_y_min;
+    }
+}
+	
+
 struct Curve{
 	x_vec: Vec<f64>,
     y_vec: Vec<f64>,
     color: (f64, f64, f64)
 }
 
-struct MyWidget{
-    widget: gtk::DrawingArea,
-    x_axis_range: i32,
-    y_axis_range: i32,
-    y_axis_offset: i32,
-    x_axis_offset: i32,
-	curves: Vec<Curve>,
+struct Border {
+    pl_grid: gtk::Grid,
+    pl_parms: PlotParams,
+    rebuild: bool,
+    
 }
 
-// Note that MyWidget is of type Mutex.  This allows the dynamic update of
+impl Border {
+    fn new() -> Arc<Mutex<Border>>  {
+        let result = Arc::new(Mutex::new(Border{
+            pl_grid: gtk::Grid::new(),
+            pl_parms: PlotParams { 
+					margin_width: 50,
+					//top_label: String::from("This is the top label"),
+			//  If there is no top label then the top label and tick marks will not draw.
+					top_label: String::from(""),
+					right_label: String::from("This is the right label"),
+					bottom_label: String::from("This is the bottom label"),
+					left_label: String::from("This is the left label"),
+					x0_max: 100.0,
+					x0_min: 0.0,
+					y0_max: 1.0, 
+					y0_min: -1.0,
+					x_max: 100.0,
+					x_min: 0.0,
+					y_max: 1.00,
+					y_min: -1.0,
+					num_x_ticks: 10.0,
+					num_y_ticks: 5.0	
+				},
+				
+			rebuild: false,
+            
+		}));
+		
+        
+             
+        result
+    }
+   
+    fn create_plot(&mut self) {
+		
+		self.pl_grid.set_column_spacing(0);
+		self.pl_grid.set_row_spacing(0);
+
+		let x_ticks = create_tick_positions(self.pl_parms.x_max, self.pl_parms.x_min, self.pl_parms.y_max, self.pl_parms.y_min, self.pl_parms.num_x_ticks, self.pl_parms.num_y_ticks,"x");
+		let y_ticks = create_tick_positions(self.pl_parms.x_max, self.pl_parms.x_min, self.pl_parms.y_max, self.pl_parms.y_min, self.pl_parms.num_x_ticks, self.pl_parms.num_y_ticks,"y");
+		
+		let h_axis_b = Axis::new(100, self.pl_parms.margin_width, 11.0, false, false);
+		let h_axis_t = Axis::new(100, self.pl_parms.margin_width, 11.0, false, false);
+		let v_axis_l = Axis::new(self.pl_parms.margin_width, 100, 11.0, false, false);
+		let v_axis_r = Axis::new(self.pl_parms.margin_width, 100, 11.0, false, false);
+		let mut axis_x_b = create_axis_x_b(h_axis_b, x_ticks, self.pl_parms.bottom_label.clone(), self.pl_parms.margin_width as f64);
+		let mut axis_x_t = create_axis_x_t(h_axis_t, self.pl_parms.top_label.clone(), self.pl_parms.margin_width as f64);
+		let mut axis_y_l = create_axis_y_l(v_axis_l, y_ticks, self.pl_parms.left_label.clone(), self.pl_parms.margin_width as f64);
+		let mut axis_y_r = create_axis_y_r(v_axis_r, self.pl_parms.right_label.clone(), self.pl_parms.margin_width as f64);
+
+		
+		self.pl_grid.attach(&axis_x_t, 0, 0, 3, 1);
+		self.pl_grid.attach(&axis_x_b, 0, 2, 3, 1);
+		self.pl_grid.attach(&axis_y_l, 0, 0, 1, 3);
+		self.pl_grid.attach(&axis_y_r, 2, 0, 1, 3);
+		
+	}
+ 
+}
+
+
+struct Canvas{
+    draw_area: gtk::DrawingArea,
+    x_axis_range: f64,
+    y_axis_range: f64,
+    y_axis_offset: f64,
+    x_axis_offset: f64,
+	curves: Vec<Curve>,
+	selection: bool,
+	rect: Rectangle,
+	rect_o: Rectangle 
+}
+
+// Note that Canvas is of type Mutex.  This allows the dynamic update of
 // members of the struct and their use in the draw function of the DrawingArea
 
-impl MyWidget {
-    fn new() -> Arc<Mutex<MyWidget>>  {
-        let result = Arc::new(Mutex::new(MyWidget{
-            widget: create_canvas(),
-            x_axis_range: 0,
-            y_axis_range: 0,
-            y_axis_offset: 0,
-			x_axis_offset: 0,
-            curves: Vec::new()
+impl Canvas {
+    fn new() -> Arc<Mutex<Canvas>>  {
+        let result = Arc::new(Mutex::new(Canvas{
+            draw_area: create_canvas(),
+            x_axis_range: 0.0,
+            y_axis_range: 0.0,
+            y_axis_offset: 0.0,
+			x_axis_offset: 0.0,
+            curves: Vec::new(),
+            selection: false,
+            rect: Rectangle {x1:0.0, y1:0.0, w:0.0, h:0.0},
+            rect_o: Rectangle {x1:0.0, y1:0.0, w:0.0, h:0.0}
         }));
         let r2 = result.clone();
-        result.lock().unwrap().widget.set_draw_func(move|_, cr, w, h|{
+        result.lock().unwrap().draw_area.set_draw_func(move|_, cr, w, h|{
            r2.lock().unwrap().redraw(cr, w, h);
         });
              
         result
     }
    
-    fn set_y_axis_range(&mut self, new_range: i32) {
+    fn set_y_axis_range(&mut self, new_range: f64) {
         self.y_axis_range = new_range;
     }
     
-    fn set_x_axis_range(&mut self, new_range: i32) {
+    fn set_x_axis_range(&mut self, new_range: f64) {
         self.x_axis_range = new_range;
     }
     
-    fn set_x_axis_offset(&mut self, offset: i32) {
+    fn set_x_axis_offset(&mut self, offset: f64) {
         self.x_axis_offset = offset;    
     }
     
-    fn set_y_axis_offset(&mut self, offset: i32) {
+    fn set_y_axis_offset(&mut self, offset: f64) {
         self.y_axis_offset = offset;    
     }
        
     fn add_curve (&mut self, new_curve: Curve){
 		self.curves.push(new_curve);
 	}
+	
+	fn set_selection(&mut self, select: bool) {
+        self.selection = select;    
+    }
+    
+    fn set_rect(&mut self, rect_in: Rectangle) {
+        self.rect = rect_in;    
+    }
     
     fn redraw(&self, cr: &Context, w: i32, h: i32) {
 		
@@ -89,7 +206,7 @@ impl MyWidget {
 				
 		for i in 0..self.curves[ii].x_vec.len() {
 			
-			let mut x = (self.x_axis_offset as f64 + self.curves[ii].x_vec[i])*w as f64/self.x_axis_range as f64;
+			let mut x = (-self.x_axis_offset as f64 + self.curves[ii].x_vec[i])*w as f64/self.x_axis_range as f64;
 			//let mut x = (self.x_axis_offset as f64 + self.x_vec[i])*w as f64/self.x_axis_range as f64;
 			let mut y = h as f64 + ((self.y_axis_offset as f64 - self.curves[ii].y_vec[i])* h as f64)/self.y_axis_range as f64;
 			//let mut y = h as f64 + ((self.y_axis_offset as f64 - self.y_vec[i])* h as f64)/self.y_axis_range as f64;
@@ -108,7 +225,15 @@ impl MyWidget {
 			//cr.move_to(x, y);
 			//let _res = cr.show_text("x");
 			
+		}		
+			
+		
+			if self.selection {
+				cr.rectangle(self.rect.x1, self.rect.y1, self.rect.w, self.rect.h);
+				cr.stroke();
 		}
+			
+		
 		}
 		()
 
@@ -130,33 +255,6 @@ impl Axis {
 	}
 }
 
-
-fn create_plot(pl_params: &PlotParams) -> Grid {
-	let pl_grid = Grid::new();
-	pl_grid.set_column_spacing(0);
-	pl_grid.set_row_spacing(0);
-
-	let x_ticks = create_tick_positions(&pl_params, "x");
-	let y_ticks = create_tick_positions(&pl_params, "y");
-	
-	let h_axis_b = Axis::new(100, pl_params.margin_width, 11.0, false, false);
-	let h_axis_t = Axis::new(100, pl_params.margin_width, 11.0, false, false);
-	let v_axis_l = Axis::new(pl_params.margin_width, 100, 11.0, false, false);
-	let v_axis_r = Axis::new(pl_params.margin_width, 100, 11.0, false, false);
-	let axis_x_b = create_axis_x_b(h_axis_b, x_ticks, pl_params.bottom_label.clone(), pl_params.margin_width as f64);
-	let axis_x_t = create_axis_x_t(h_axis_t, pl_params.top_label.clone(), pl_params.margin_width as f64);
-	let axis_y_l = create_axis_y_l(v_axis_l, y_ticks, pl_params.left_label.clone(), pl_params.margin_width as f64);
-	let axis_y_r = create_axis_y_r(v_axis_r, pl_params.right_label.clone(), pl_params.margin_width as f64);
-
-	pl_grid.attach(&axis_x_t, 0, 0, 3, 1);
-	pl_grid.attach(&axis_x_b, 0, 2, 3, 1);
-	pl_grid.attach(&axis_y_l, 0, 0, 1, 3);
-	pl_grid.attach(&axis_y_r, 2, 0, 1, 3);
-	
-	pl_grid
-	
-}
-
 fn create_canvas() -> DrawingArea {
 	let area = DrawingArea::new();
 	area.set_content_width(300);
@@ -165,6 +263,9 @@ fn create_canvas() -> DrawingArea {
 	area.set_vexpand(true);
 	area
 }
+
+// If I want to redraw the axes and tick marks I need to have them get the ticks[] from
+// elsewhere than passing as a variable so that they can be changed on the fly.
 
 fn create_axis_x_b(axis:Axis, ticks:Vec<f64>, label: String, m_width: f64) -> DrawingArea {
 		let axis_x_b = DrawingArea::new();
@@ -214,6 +315,7 @@ fn create_axis_x_b(axis:Axis, ticks:Vec<f64>, label: String, m_width: f64) -> Dr
 			}	
 			()
         });
+        
 	axis_x_b
 }
 
@@ -434,16 +536,17 @@ fn myadd(n1: f64, n2: f64) -> f64 {
     return ((n1 * m).round() + (n2 * m).round())/ m;
     }
 
-fn create_tick_positions(pl_params: &PlotParams, which: &str) -> Vec<f64>  {
+//fn create_tick_positions(pl_params: &PlotParams, which: &str) -> Vec<f64>  {
+fn create_tick_positions(x_max: f64, x_min: f64, y_max: f64, y_min: f64, num_x_ticks: f64, num_y_ticks: f64, which: &str) -> Vec<f64>  {
     
-    let mut max: f64 = pl_params.x_max;
-	let mut min: f64 = pl_params.x_min;
-	let mut num: f64 = pl_params.num_x_ticks;
+    let mut max: f64 = x_max;
+	let mut min: f64 = x_min;
+	let mut num: f64 = num_x_ticks;
 	
 	if which == "y" {
-		max = pl_params.y_max;
-		min = pl_params.y_min;
-		num = pl_params.num_y_ticks;
+		max = y_max;
+		min = y_min;
+		num = num_y_ticks;
 	}
          
     if min == max {
@@ -479,10 +582,27 @@ fn main() {
     app.run();
 }
 
+fn axis_range_setup(a2: &Arc<Mutex<Canvas>>, pl_params: &PlotParams) {
+	
+	let x_ticks = create_tick_positions(pl_params.x_max, pl_params.x_min, pl_params.y_max, pl_params.y_min, pl_params.num_x_ticks, pl_params.num_y_ticks,"x");
+	let y_ticks = create_tick_positions(pl_params.x_max, pl_params.x_min, pl_params.y_max, pl_params.y_min, pl_params.num_x_ticks, pl_params.num_y_ticks, "y");
+	
+	let x_tick_range = (x_ticks[x_ticks.len()-1] - x_ticks[0]).abs();
+	let y_tick_range = (y_ticks[y_ticks.len()-1] - y_ticks[0]).abs();
+
+	a2.lock().unwrap().set_x_axis_offset(x_ticks[0] as f64);
+	a2.lock().unwrap().set_y_axis_offset(y_ticks[0] as f64);
+
+	a2.lock().unwrap().set_x_axis_range(x_tick_range as f64);
+	a2.lock().unwrap().set_y_axis_range(y_tick_range as f64);
+	//println!("{:?}", x_ticks);
+	//println!("{:?}", y_ticks);
+
+}
+
 
 fn build_ui(app: &Application) {
   
-// This button does nothing at present.  Was originally used for testing.
 	let button = Button::builder()
         .label("Press me!")
         .margin_top(12)
@@ -494,49 +614,220 @@ fn build_ui(app: &Application) {
 	let gtk_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
         .build();
-           
-    let pl_params = PlotParams {
-		margin_width: 40,
+//  pl_parms_config contains all of the information for constructing the plot framework      
+   
+    let mut pl_parms_config = PlotParams {
+		margin_width: 50,
 		//top_label: String::from("This is the top label"),
 //  If there is no top label then the top label and tick marks will not draw.
 		top_label: String::from(""),
 		right_label: String::from("This is the right label"),
 		bottom_label: String::from("This is the bottom label"),
 		left_label: String::from("This is the left label"),
+		//the primary configuration must have *0_max and *_max the same.
+		x0_max: 100.0,
+		x0_min: 0.0,
+		y0_max: 1.0, 
+		y0_min: -1.0,
 		x_max: 100.0,
 		x_min: 0.0,
 		y_max: 1.0,
 		y_min: -1.0,
 		num_x_ticks: 10.0,
 		num_y_ticks: 5.0	
+
 	};
+ 
 
-    let pl_grid = create_plot(&pl_params);
+//  canvas contains the plot drawing area
     
-    let my_widget = MyWidget::new();
-	let a2 = my_widget.clone();
+    let canvas = Canvas::new();
+	let a2 = canvas.clone();
+	let border = Border::new();
+	let b2 = border.clone();
+	b2.lock().unwrap().pl_parms = pl_parms_config;
 	
-	let x_ticks = create_tick_positions(&pl_params, "x");
-	let y_ticks = create_tick_positions(&pl_params, "y");
+// create_plot does everything except the plot area	
+	b2.lock().unwrap().create_plot();
 	
-	let x_tick_range = (x_ticks[x_ticks.len()-1] - x_ticks[0]).abs();
-	let y_tick_range = (y_ticks[y_ticks.len()-1] - y_ticks[0]).abs();
-	
-	a2.lock().unwrap().set_x_axis_offset(x_ticks[0] as i32);
-	a2.lock().unwrap().set_y_axis_offset(y_ticks[0] as i32);
-	
-	a2.lock().unwrap().set_x_axis_range(x_tick_range as i32);
-	a2.lock().unwrap().set_y_axis_range(y_tick_range as i32);
-	
-    pl_grid.attach(&a2.lock().unwrap().widget, 1, 1, 1, 1);
-    gtk_box.append(&pl_grid);
+	axis_range_setup(&a2, &b2.lock().unwrap().pl_parms);
+//  put the drawingarea into the grid	
 
+	b2.lock().unwrap().pl_grid.attach(&a2.lock().unwrap().draw_area, 1, 1, 1, 1);
+//  put the grid into a box
+	gtk_box.append(&b2.lock().unwrap().pl_grid);
+
+	let coords = gtk::Label::new(None);	
+		
+	gtk_box.append(&coords);
     gtk_box.append(&button);
+	
+	// Create a click gesture for the right button for canceling the zoom
+    let m_gesture = gtk::GestureClick::new();
 
-	button.connect_clicked(move |_| {
-// nothing here on purpose		
-            
-     });
+    // Set the gestures button to the right mouse button (=3)
+    m_gesture.set_button(gtk::gdk::ffi::GDK_BUTTON_SECONDARY as u32);
+
+    // Assign your handler to an event of the gesture (e.g. the `pressed` event)
+    m_gesture.connect_pressed(clone!(@weak  a2, @weak b2 => move|m_gesture, _, _, _| {
+       m_gesture.set_state(gtk::EventSequenceState::Claimed);
+//        This uses the original parameters in pl_parms_config to un-zoom
+		let allocation = a2.lock().unwrap().draw_area.allocation();
+		let width = allocation.width();
+		let height = allocation.height();
+
+		let x_max_temp = b2.lock().unwrap().pl_parms.x0_max;
+		let x_min_temp = b2.lock().unwrap().pl_parms.x0_min;
+		let y_max_temp = b2.lock().unwrap().pl_parms.y0_max;
+		let y_min_temp = b2.lock().unwrap().pl_parms.y0_min;
+		b2.lock().unwrap().pl_parms.x_max = x_max_temp;
+		b2.lock().unwrap().pl_parms.x_min = x_min_temp;
+		b2.lock().unwrap().pl_parms.y_max = y_max_temp;
+		b2.lock().unwrap().pl_parms.y_min = y_min_temp;
+
+        axis_range_setup(&a2, &b2.lock().unwrap().pl_parms); 
+        b2.lock().unwrap().pl_grid.remove_column(0);
+		b2.lock().unwrap().pl_grid.remove_column(1);
+		b2.lock().unwrap().pl_grid.remove_column(2);
+		b2.lock().unwrap().pl_grid.remove_row(0);
+		b2.lock().unwrap().pl_grid.remove_row(1);
+		b2.lock().unwrap().pl_grid.remove_row(2);
+		b2.lock().unwrap().pl_grid.remove(&a2.lock().unwrap().draw_area);
+		
+		b2.lock().unwrap().create_plot();
+		
+		b2.lock().unwrap().pl_grid.attach(&a2.lock().unwrap().draw_area, 1, 1, 1, 1);
+		// erase the rectangle
+		a2.lock().unwrap().selection = false;
+		a2.lock().unwrap().rect.x1 = 0.0;
+		a2.lock().unwrap().rect.y1 = 0.0;
+		a2.lock().unwrap().rect.w = 0.0;
+		a2.lock().unwrap().rect.h = 0.0;
+		a2.lock().unwrap().draw_area.queue_draw();
+    }));
+    
+    a2.lock().unwrap().draw_area.add_controller(&m_gesture);
+
+// use the motion controller event to get current position of the cursor
+// and convert it to user coords to display below the plot.
+
+    let ecm = gtk::EventControllerMotion::new();
+    a2.lock().unwrap().draw_area.add_controller(&ecm);
+ 
+    ecm.connect_motion(clone!(@weak  a2 => move|ecm, x, y| {
+	// to calculate the graph position of the mouse, convert screen coords to graph coords.
+		let mw =  &a2.lock().unwrap();
+		let allocation = mw.draw_area.allocation();
+		let width = allocation.width();
+		let height = allocation.height();
+		let xar = mw.x_axis_range;
+		let yar = mw.y_axis_range;
+		let xao = mw.x_axis_offset;
+		let yao = mw.y_axis_offset;
+		let x_scaled = xao as f64 + x*xar as f64/width as f64;
+		let y_scaled = yao as f64 + (height as f64-y)*yar as f64/height as f64;
+		let coord_str = format!("x= {}, y= {}", f64::trunc(x_scaled*100.0)/100.0, f64::trunc(y_scaled*100.0)/100.0);
+		coords.set_text(&coord_str[..]);
+   
+	}));
+	
+//  use drag gesture to draw a zoom rectangle on the canvas
+
+	let gesture_drag = gtk::GestureDrag::new();
+	a2.lock().unwrap().draw_area.add_controller(&gesture_drag);
+	gesture_drag.set_exclusive(true);
+	
+	gesture_drag.connect_drag_begin(clone!(@weak  a2 => move |_, start_x, start_y| {
+		 let mw =  &mut a2.lock().unwrap();
+		 mw.rect.x1 = start_x;  // note that this data is in draw_area screen coords
+		 mw.rect.y1 = start_y;
+		 mw.selection = true;
+	}));
+	
+	gesture_drag.connect_drag_update(clone!(@weak  a2 => move |_, mov_x, mov_y| {
+		 let mw =  &mut a2.lock().unwrap();
+		 mw.rect.w = mov_x;
+		 mw.rect.h = mov_y;
+		
+	}));
+// gesture.connect_drag_end will remove the rectangle and expand the graph
+	gesture_drag.connect_drag_end(clone!(@weak  a2 => move |_, mov_x, mov_y| {
+	// Zoom in on the selection rectangle	
+	//  A problem.  rect.* are in screen coordinates not graph coordinates
+	//  Convert them
+		let allocation = a2.lock().unwrap().draw_area.allocation();
+		let width = allocation.width();
+		let height = allocation.height();
+		
+		let mut x1_unscaled = a2.lock().unwrap().rect.x1;
+		let mut x2_unscaled = x1_unscaled + mov_x;
+		
+		if mov_x < 0.0 {
+			x2_unscaled = a2.lock().unwrap().rect.x1;
+			x1_unscaled = a2.lock().unwrap().rect.x1 + mov_x;
+		}
+		let mut y1_unscaled = a2.lock().unwrap().rect.y1;
+		let mut y2_unscaled = y1_unscaled + mov_y;
+		if mov_y > 0.0 {
+			y2_unscaled = a2.lock().unwrap().rect.y1;
+			y1_unscaled = a2.lock().unwrap().rect.y1 + mov_y;
+		}
+		if x1_unscaled < 0.0 { x1_unscaled = 0.0 }
+		if x1_unscaled > width as f64 { x1_unscaled = width as f64 }
+		if x2_unscaled < 0.0 { x2_unscaled = 0.0 }
+		if x2_unscaled > width as f64 { x2_unscaled = width as f64 }
+		
+		if y1_unscaled < 0.0 { x1_unscaled = 0.0 }
+		if y1_unscaled > height as f64 { y1_unscaled = height as f64 }
+		if y2_unscaled < 0.0 { y2_unscaled = 0.0 }
+		if y2_unscaled > height as f64 { y2_unscaled = height as f64 }
+		
+		let xar = a2.lock().unwrap().x_axis_range;
+		let yar = a2.lock().unwrap().y_axis_range;
+		let xao = a2.lock().unwrap().x_axis_offset;
+		let yao = a2.lock().unwrap().y_axis_offset;
+		let x1_scaled = xao as f64 + x1_unscaled*xar as f64/width as f64;
+		let x2_scaled = xao as f64 + x2_unscaled*xar as f64/width as f64;
+		let y1_scaled = yao as f64 + (height as f64-y1_unscaled)*yar as f64/height as f64;
+		let y2_scaled = yao as f64 + (height as f64-y2_unscaled)*yar as f64/height as f64;
+		
+		b2.lock().unwrap().pl_parms.set_x_max(x2_scaled);
+		b2.lock().unwrap().pl_parms.set_x_min(x1_scaled);
+		b2.lock().unwrap().pl_parms.set_y_max(y2_scaled);
+		b2.lock().unwrap().pl_parms.set_y_min(y1_scaled);
+		
+		axis_range_setup(&a2, &b2.lock().unwrap().pl_parms); 
+		// remove the old graph and put in the zoomed graph	
+		b2.lock().unwrap().pl_grid.remove_column(0);
+		b2.lock().unwrap().pl_grid.remove_column(1);
+		b2.lock().unwrap().pl_grid.remove_column(2);
+		b2.lock().unwrap().pl_grid.remove_row(0);
+		b2.lock().unwrap().pl_grid.remove_row(1);
+		b2.lock().unwrap().pl_grid.remove_row(2);
+		b2.lock().unwrap().pl_grid.remove(&a2.lock().unwrap().draw_area);
+		
+		b2.lock().unwrap().create_plot();
+		b2.lock().unwrap().pl_grid.attach(&a2.lock().unwrap().draw_area, 1, 1, 1, 1);
+		// erase the rectangle
+		a2.lock().unwrap().selection = false;
+		a2.lock().unwrap().rect.x1 = 0.0;
+		a2.lock().unwrap().rect.y1 = 0.0;
+		a2.lock().unwrap().rect.w = 0.0;
+		a2.lock().unwrap().rect.h = 0.0;
+		a2.lock().unwrap().draw_area.queue_draw();
+	}));
+       
+	let number = Rc::new(Cell::new(1));
+
+		button.connect_clicked(clone!(@weak number, @weak  a2 =>
+			move |_| {
+				if number.get() == 1
+				{ number.set(0)}
+				else
+				{ number.set(1);
+						
+				}
+		}));
 
 
     // Create a window
@@ -550,14 +841,20 @@ fn build_ui(app: &Application) {
     // Present window
     window.show();
 	let mut n = 0;
-	
+    
+   
 //  tick is a function called by the timer (see below).  Each time it is called 
-// it calculates a sin function that is transferred to the MyWIdget struct and that
+// it calculates a sin function that is transferred to the MyWidget struct and that
 // triggers a redraw of the plotting portion of the image.
 // Each time it is called the function draws at a different displacement.  This gives
 // the impression that the plot is moving.
 
 	let tick = move || -> gio::prelude::Continue {
+// if number is set to 1 then the plot is frozen in its current state.
+		if number.get() == 0 { 
+			a2.lock().unwrap().draw_area.queue_draw();
+			return gio::prelude::Continue(true)
+			}
         n += 1;
         if n > 500 { n = 1}
         a2.lock().unwrap().curves.clear();
@@ -573,7 +870,7 @@ fn build_ui(app: &Application) {
 		let mut c1 = Curve{x_vec: x2_vec, y_vec: y2_vec, color: (1.0, 0.0, 0.0)};
 		a2.lock().unwrap().add_curve(c1);
 		
-        // add a second curve		
+        // add a second curve  .. actually a straight line!		
 		let mut x3_vec = Vec::new();
         let mut y3_vec = Vec::new();
 		
@@ -586,7 +883,7 @@ fn build_ui(app: &Application) {
 		a2.lock().unwrap().add_curve(c1);
         
         // trigger a redraw of the canvas
-        a2.lock().unwrap().widget.queue_draw();
+        a2.lock().unwrap().draw_area.queue_draw();
         
         // we could return glib::Continue(false) to stop our clock after this tick
        gio::prelude::Continue(true)
