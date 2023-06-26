@@ -10,7 +10,9 @@ One of the more difficult challenges was to find a method to continuously send u
 
 I am quite aware that there are better plotting programs and libraries in Rust (Plotter for example).  The goal of the present effort was not to provide a better solution.  It was to provide a simple example of how the code can be written.  I am also aware that there are many, many deficiencies in the style of the code written.  I am a beginning Rust programmer and am still learning.
 
-There are no restrictions or guarantees on using this code either for personal or commercial use.  Acknowledgement is always appreciated
+There are no restrictions or guarantees on using this code either for personal or commercial use.  Acknowledgement is always appreciated.
+
+Recent updates of the code provide a means for selecting and displaying a portion of the plot (zoom feature; left click, drag) and returning to the original dimensions (unzoom; right click) (June 2023).
 
 I would be very happy to answer questions about the code.  You can send personal Email to charltn at gmail.com.
 
