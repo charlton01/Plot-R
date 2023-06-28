@@ -1,7 +1,7 @@
 //  Plot-R a simple plotting program in Rust that uses gtk4-rs 
 
 use gtk::prelude::*;
-use gtk::{Application, ApplicationWindow, DrawingArea, Grid, Button, Orientation, glib, EventControllerMotion};
+use gtk::{Application, ApplicationWindow, DrawingArea, Button, Orientation, glib};
 use std::sync::{Arc,Mutex};
 use cairo::Context;
 use std::time::{Duration};
@@ -68,8 +68,6 @@ struct Curve{
 struct Border {
     pl_grid: gtk::Grid,
     pl_parms: PlotParams,
-    rebuild: bool,
-    
 }
 
 impl Border {
@@ -95,9 +93,7 @@ impl Border {
 					num_x_ticks: 10.0,
 					num_y_ticks: 5.0	
 				},
-				
-			rebuild: false,
-            
+				            
 		}));
 		
         
@@ -117,10 +113,10 @@ impl Border {
 		let h_axis_t = Axis::new(100, self.pl_parms.margin_width, 11.0, false, false);
 		let v_axis_l = Axis::new(self.pl_parms.margin_width, 100, 11.0, false, false);
 		let v_axis_r = Axis::new(self.pl_parms.margin_width, 100, 11.0, false, false);
-		let mut axis_x_b = create_axis_x_b(h_axis_b, x_ticks, self.pl_parms.bottom_label.clone(), self.pl_parms.margin_width as f64);
-		let mut axis_x_t = create_axis_x_t(h_axis_t, self.pl_parms.top_label.clone(), self.pl_parms.margin_width as f64);
-		let mut axis_y_l = create_axis_y_l(v_axis_l, y_ticks, self.pl_parms.left_label.clone(), self.pl_parms.margin_width as f64);
-		let mut axis_y_r = create_axis_y_r(v_axis_r, self.pl_parms.right_label.clone(), self.pl_parms.margin_width as f64);
+		let axis_x_b = create_axis_x_b(h_axis_b, x_ticks, self.pl_parms.bottom_label.clone(), self.pl_parms.margin_width as f64);
+		let axis_x_t = create_axis_x_t(h_axis_t, self.pl_parms.top_label.clone(), self.pl_parms.margin_width as f64);
+		let axis_y_l = create_axis_y_l(v_axis_l, y_ticks, self.pl_parms.left_label.clone(), self.pl_parms.margin_width as f64);
+		let axis_y_r = create_axis_y_r(v_axis_r, self.pl_parms.right_label.clone(), self.pl_parms.margin_width as f64);
 
 		
 		self.pl_grid.attach(&axis_x_t, 0, 0, 3, 1);
@@ -141,8 +137,8 @@ struct Canvas{
     x_axis_offset: f64,
 	curves: Vec<Curve>,
 	selection: bool,
-	rect: Rectangle,
-	rect_o: Rectangle 
+	rect: Rectangle
+
 }
 
 // Note that Canvas is of type Mutex.  This allows the dynamic update of
@@ -158,8 +154,8 @@ impl Canvas {
 			x_axis_offset: 0.0,
             curves: Vec::new(),
             selection: false,
-            rect: Rectangle {x1:0.0, y1:0.0, w:0.0, h:0.0},
-            rect_o: Rectangle {x1:0.0, y1:0.0, w:0.0, h:0.0}
+            rect: Rectangle {x1:0.0, y1:0.0, w:0.0, h:0.0}
+            
         }));
         let r2 = result.clone();
         result.lock().unwrap().draw_area.set_draw_func(move|_, cr, w, h|{
@@ -189,14 +185,6 @@ impl Canvas {
 		self.curves.push(new_curve);
 	}
 	
-	fn set_selection(&mut self, select: bool) {
-        self.selection = select;    
-    }
-    
-    fn set_rect(&mut self, rect_in: Rectangle) {
-        self.rect = rect_in;    
-    }
-    
     fn redraw(&self, cr: &Context, w: i32, h: i32) {
 		
 		//interate through the curves and plot each one
@@ -206,9 +194,9 @@ impl Canvas {
 				
 		for i in 0..self.curves[ii].x_vec.len() {
 			
-			let mut x = (-self.x_axis_offset as f64 + self.curves[ii].x_vec[i])*w as f64/self.x_axis_range as f64;
+			let x = (-self.x_axis_offset as f64 + self.curves[ii].x_vec[i])*w as f64/self.x_axis_range as f64;
 			//let mut x = (self.x_axis_offset as f64 + self.x_vec[i])*w as f64/self.x_axis_range as f64;
-			let mut y = h as f64 + ((self.y_axis_offset as f64 - self.curves[ii].y_vec[i])* h as f64)/self.y_axis_range as f64;
+			let y = h as f64 + ((self.y_axis_offset as f64 - self.curves[ii].y_vec[i])* h as f64)/self.y_axis_range as f64;
 			//let mut y = h as f64 + ((self.y_axis_offset as f64 - self.y_vec[i])* h as f64)/self.y_axis_range as f64;
 			if i == 0 {
 				cr.move_to(x, y);
@@ -230,7 +218,7 @@ impl Canvas {
 		
 			if self.selection {
 				cr.rectangle(self.rect.x1, self.rect.y1, self.rect.w, self.rect.h);
-				cr.stroke();
+				let _result = cr.stroke();
 		}
 			
 		
@@ -500,7 +488,7 @@ fn nice(x: f64, round: bool) -> f64 {
 	
     let exp: f64 = (x.ln().floor() / 10_f64.ln()).floor();
     let f = x / 10_f64.powf(exp);
-    let mut nf = 0.0;
+    let nf;
     if round{
         if f < 1.5 {
             nf = 1.0;
@@ -616,7 +604,7 @@ fn build_ui(app: &Application) {
         .build();
 //  pl_parms_config contains all of the information for constructing the plot framework      
    
-    let mut pl_parms_config = PlotParams {
+    let pl_parms_config = PlotParams {
 		margin_width: 50,
 		//top_label: String::from("This is the top label"),
 //  If there is no top label then the top label and tick marks will not draw.
@@ -672,9 +660,9 @@ fn build_ui(app: &Application) {
     m_gesture.connect_pressed(clone!(@weak  a2, @weak b2 => move|m_gesture, _, _, _| {
        m_gesture.set_state(gtk::EventSequenceState::Claimed);
 //        This uses the original parameters in pl_parms_config to un-zoom
-		let allocation = a2.lock().unwrap().draw_area.allocation();
-		let width = allocation.width();
-		let height = allocation.height();
+//		let allocation = a2.lock().unwrap().draw_area.allocation();
+//		let width = allocation.width();
+//		let height = allocation.height();
 
 		let x_max_temp = b2.lock().unwrap().pl_parms.x0_max;
 		let x_min_temp = b2.lock().unwrap().pl_parms.x0_min;
@@ -714,7 +702,7 @@ fn build_ui(app: &Application) {
     let ecm = gtk::EventControllerMotion::new();
     a2.lock().unwrap().draw_area.add_controller(&ecm);
  
-    ecm.connect_motion(clone!(@weak  a2 => move|ecm, x, y| {
+    ecm.connect_motion(clone!(@weak  a2 => move|_ecm, x, y| {
 	// to calculate the graph position of the mouse, convert screen coords to graph coords.
 		let mw =  &a2.lock().unwrap();
 		let allocation = mw.draw_area.allocation();
