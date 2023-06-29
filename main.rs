@@ -77,8 +77,8 @@ impl Border {
             pl_parms: PlotParams { 
 					margin_width: 50,
 					//top_label: String::from("This is the top label"),
-			//  If there is no top label then the top label and tick marks will not draw.
-					top_label: String::from(""),
+			//  If there is no top label then the top label will not draw.
+					top_label: String::from("My Cool Plot"),
 					right_label: String::from("This is the right label"),
 					bottom_label: String::from("This is the bottom label"),
 					left_label: String::from("This is the left label"),
@@ -109,10 +109,10 @@ impl Border {
 		let x_ticks = create_tick_positions(self.pl_parms.x_max, self.pl_parms.x_min, self.pl_parms.y_max, self.pl_parms.y_min, self.pl_parms.num_x_ticks, self.pl_parms.num_y_ticks,"x");
 		let y_ticks = create_tick_positions(self.pl_parms.x_max, self.pl_parms.x_min, self.pl_parms.y_max, self.pl_parms.y_min, self.pl_parms.num_x_ticks, self.pl_parms.num_y_ticks,"y");
 		
-		let h_axis_b = Axis::new(100, self.pl_parms.margin_width, 11.0, false, false);
-		let h_axis_t = Axis::new(100, self.pl_parms.margin_width, 11.0, false, false);
-		let v_axis_l = Axis::new(self.pl_parms.margin_width, 100, 11.0, false, false);
-		let v_axis_r = Axis::new(self.pl_parms.margin_width, 100, 11.0, false, false);
+		let h_axis_b = Axis::new(100, self.pl_parms.margin_width, 11.0, false, false, false);
+		let h_axis_t = Axis::new(100, self.pl_parms.margin_width, 11.0, false, false, true);
+		let v_axis_l = Axis::new(self.pl_parms.margin_width, 100, 11.0, false, false, false);
+		let v_axis_r = Axis::new(self.pl_parms.margin_width, 100, 11.0, false, false, false);
 		let axis_x_b = create_axis_x_b(h_axis_b, x_ticks, self.pl_parms.bottom_label.clone(), self.pl_parms.margin_width as f64);
 		let axis_x_t = create_axis_x_t(h_axis_t, self.pl_parms.top_label.clone(), self.pl_parms.margin_width as f64);
 		let axis_y_l = create_axis_y_l(v_axis_l, y_ticks, self.pl_parms.left_label.clone(), self.pl_parms.margin_width as f64);
@@ -234,12 +234,13 @@ pub struct Axis {
     pub fontsz: f64,
     pub hstretch: bool,
     pub vstretch: bool,
+    pub no_ticks: bool
 }
 
 impl Axis {
 
- fn new(w: i32, h: i32, fontsz: f64, hstr: bool, vstr: bool ) -> Axis {
-        Axis { width: w, height: h, fontsz: fontsz, hstretch: hstr, vstretch: vstr }			
+ fn new(w: i32, h: i32, fontsz: f64, hstr: bool, vstr: bool, no_t: bool ) -> Axis {
+        Axis { width: w, height: h, fontsz: fontsz, hstretch: hstr, vstretch: vstr, no_ticks: no_t }			
 	}
 }
 
@@ -263,7 +264,7 @@ fn create_axis_x_b(axis:Axis, ticks:Vec<f64>, label: String, m_width: f64) -> Dr
 		axis_x_b.set_hexpand(axis.hstretch);
 		axis_x_b.set_draw_func(move|_, cr, w, h| {
 
-			cr.set_source_rgba(0.0, 1.0, 0.0, 0.3);
+			cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
             let mut _res = cr.paint();
  
 // draw line along bottom axis
@@ -315,7 +316,7 @@ fn create_axis_x_t(axis:Axis, label: String, m_width: f64) -> DrawingArea {
 		axis_x_t.set_hexpand(axis.hstretch);
 		axis_x_t.set_draw_func(move|_, cr, w, _| {
 			
-			cr.set_source_rgba(0.0, 1.0, 0.0, 0.3);
+			cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
 			let mut _res = cr.paint();
 			
 // draw line along top axis
@@ -325,16 +326,22 @@ fn create_axis_x_t(axis:Axis, label: String, m_width: f64) -> DrawingArea {
 			cr.line_to(w as f64 - m_width, m_width-1.0);
 			_res = cr.stroke();
 			
-// If there is no label do not draw ticks, tick_labels, or minor ticks
-			if label.len() == 0 {
-				return ()
+// If there is no label do not draw label
+// Label has larger text and lower position to make it a label for the plot rather than the axis
+			if label.len() > 0 {
+					// insert the axis label 			
+				cr.set_source_rgb(0.0, 0.0, 0.0);
+				let extents2 = cr.text_extents(&label).unwrap();
+				cr.move_to(w as f64/2.0 - extents2.width()/2.0, extents2.height() + 8.0);
+				_res = Ok(cr.set_font_size(15.0));
+				_res = cr.show_text(&label);
+				
+			}
+			
+			if axis.no_ticks {  //do not draw ticks, tick_labels, or minor ticks
+				return ();
 			}
 
-// insert the axis label 			
-			cr.set_source_rgb(0.0, 0.0, 0.0);
-			let extents2 = cr.text_extents(&label).unwrap();
-			cr.move_to(w as f64/2.0 - extents2.width()/2.0, extents2.height() + 2.0);
-			_res = cr.show_text(&label);
 
 			for n in 0..11 {
 //draw tick marks onlong the top axis
@@ -364,7 +371,7 @@ fn create_axis_y_l(axis:Axis, ticks:Vec<f64>, label: String, m_width: f64) -> Dr
 		axis_y_l.set_hexpand(axis.hstretch);
 		axis_y_l.set_draw_func(move|_, cr, w, h| {
 			
-			cr.set_source_rgba(0.0, 1.0, 0.0, 0.3);
+			cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
             let mut _res = cr.paint();
             
 // draw line along left axis
@@ -413,7 +420,7 @@ fn create_axis_y_r(axis:Axis, label: String, m_width: f64) -> DrawingArea {
 		axis_y_r.set_hexpand(axis.hstretch);
 		axis_y_r.set_draw_func(move|_, cr, w, h| {
 			
-			cr.set_source_rgba(0.0, 1.0, 0.0, 0.3);
+			cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
             let mut _res =cr.paint();
             
 // draw line along right axis
@@ -608,7 +615,7 @@ fn build_ui(app: &Application) {
 		margin_width: 50,
 		//top_label: String::from("This is the top label"),
 //  If there is no top label then the top label and tick marks will not draw.
-		top_label: String::from(""),
+		top_label: String::from("My Cool Plot"),
 		right_label: String::from("This is the right label"),
 		bottom_label: String::from("This is the bottom label"),
 		left_label: String::from("This is the left label"),
